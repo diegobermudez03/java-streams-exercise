@@ -2,6 +2,7 @@ package com.diegobermudez;
 
 public record Department(
         int id,
+        String departamento,
         double densidadTotal,
         double densidadUrbana,
         double densidadRural,

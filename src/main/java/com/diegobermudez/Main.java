@@ -2,8 +2,10 @@ package com.diegobermudez;
 
 import java.io.IOException;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -11,7 +13,7 @@ import java.util.stream.Collectors;
 
 public class Main {
     public static void main(String[] args) throws IOException {
-        final List<String> lines = Files.readAllLines(Paths.get("datosDivipola.csv"), Charset.forName("ISO-8859-1"));
+        final List<String> lines = Files.readAllLines(Paths.get("datosDivipola.csv"), StandardCharsets.ISO_8859_1);
 
         final List<Row> rows = lines.stream()
                 .skip(1)
@@ -21,81 +23,69 @@ public class Main {
         final Map<Integer, List<Row>> departments = rows.stream()
                 .collect(Collectors.groupingBy(Row::codDepto));
 
-        final List<Department> deptStatitics = new LinkedList<>();
 
-        departments.forEach((k, row)->{
-            final double superficie = row.stream()
+        final List<Department> depStatitics = departments.entrySet().stream().map((entry)->{
+            final int deptId = entry.getKey();
+            final List<Row> municipios = entry.getValue();
+
+            final double superficie = municipios.stream()
                     .map(Row::superficie)
                     .reduce(0d,(previous, current)->previous+current);
 
-            final int pbRural = row.stream()
+            final int pbRural = municipios.stream()
                     .map(Row::rural)
                     .reduce(0, (previous, current)->previous+current);
 
-            final int pbUrbana = row.stream()
+            final int pbUrbana = municipios.stream()
                     .map(Row::urbana)
                     .reduce(0, (previous, current)->previous+current);
 
             final double pbTotal = pbRural + pbUrbana;
-            final double densidadTotal = pbTotal / superficie;
-            final double densidadUrbana = pbUrbana / superficie;
-            final double densidadRural = pbRural / superficie;
-            final double porcPobUrbana = (pbUrbana/pbTotal)*100;
-            final double porcPobRural = (pbRural/pbTotal)*100;
+            final double areaPromedio = superficie / municipios.stream().count();
 
-            final double areaPromedio = superficie / row.stream().count();
+            final String munMasGrande = municipios.stream()
+                    .max(Comparator.comparing(Row::superficie))
+                    .map(Row::nombreMun)
+                    .orElse("No se sabe");
 
-            final String munMasGrande = row.stream()
-                    .reduce((previous, next)->next.superficie()>  previous.superficie() ? next : previous)
-                    .get().nombreMun();
-            final String munMasChico = row.stream()
-                    .reduce((previous, next)->next.superficie() < previous.superficie() ? next : previous)
-                    .get().nombreMun();
+            final String munMasChico = municipios.stream()
+                    .min(Comparator.comparing(Row::superficie))
+                    .map(Row::nombreMun)
+                    .orElse("No se sabe");
 
-            final String munMayorDens = row.stream()
-                    .reduce((previous, next)->{
-                        final double densidadNext = (next.rural() + next.urbana()) / next.superficie();
-                        final double densidadPrevious = (previous.rural() + previous.urbana()) / previous.superficie();
-                        if(densidadNext > densidadPrevious) return next;
-                        else return previous;
-                    })
-                    .get().nombreMun();
+            final String munMayorDens = municipios.stream()
+                    .max(Comparator.comparing(row -> (row.rural() + row.urbana()) / row.superficie()))
+                    .map(Row::nombreMun)
+                    .orElse("No se sabe");
 
-            final String munMenorDens = row.stream()
-                    .reduce((previous, next)->{
-                        final double densidadNext = (next.rural() + next.urbana()) / next.superficie();
-                        final double densidadPrevious = (previous.rural() + previous.urbana()) / previous.superficie();
-                        if(densidadNext < densidadPrevious) return next;
-                        else return previous;
-                    })
-                    .get().nombreMun();
+            final String munMenorDens = municipios.stream()
+                    .min(Comparator.comparing(row -> (row.rural() + row.urbana()) / row.superficie()))
+                    .map(Row::nombreMun)
+                    .orElse("No se sabe");
 
-            deptStatitics.add(
-                    new Department(
-                            k,
-                            densidadTotal,
-                            densidadUrbana,
-                            densidadRural,
-                            porcPobUrbana,
-                            porcPobRural,
-                            areaPromedio,
-                            munMasGrande,
-                            munMasChico,
-                            munMayorDens,
-                            munMenorDens
-                    )
+            return new Department(
+                    deptId,
+                    municipios.get(0).nombreDepto(),
+                    pbTotal / superficie,
+                    pbUrbana / superficie,
+                    pbRural / superficie,
+                    (pbUrbana/pbTotal)*100,
+                    (pbRural/pbTotal)*100,
+                    areaPromedio, munMasGrande, munMasChico, munMayorDens, munMenorDens
             );
+        }).toList();
 
-        });
 
+        depStatitics.forEach((dept)->{
+            System.out.printf("%s ID: %d, Densidad total: %.2f, Densidad Urbana: %.2f, Densidad Rural: %.2f, "
+                            + "Porcentaje Poblacion Urbana: %.2f%%, Porcentaje Poblacion Rural: %.2f%%%n",
+                    dept.departamento(), dept.id(), dept.densidadTotal(), dept.densidadUrbana(), dept.densidadRural(),
+                    dept.porPobUrbana(), dept.porPobRural());
 
-        deptStatitics.forEach((dept)->{
-            System.out.println("ID: " + dept.id() + " Densidad total: " + dept.densidadTotal() + " Densidad Urbana: " + dept.densidadUrbana()
-                    + " Densidad Rural: " + dept.densidadRural() + " Porcentaje poblacion urbana: %" + dept.porPobUrbana() + " Porcentaje poblacion rural: %" + dept.porPobRural()
-            );
-            System.out.println("    Area promedio: " + dept.areaPromedio() + " Municipio mas grande: " + dept.munMasGrande() + " Municipio mas chico: " + dept.munMasChico()
-                    + " Municipio con mayor densidad: " + dept.munMayorDens() + " Municipio menor densidad: " + dept.munMenorDens()
-            );
+            System.out.printf("    Area promedio: %.2f, Municipio más grande: %s, Municipio más chico: %s, "
+                            + "Municipio mayor densidad: %s, Municipio menor densidad: %s%n",
+                    dept.areaPromedio(), dept.munMasGrande(), dept.munMasChico(),
+                    dept.munMayorDens(), dept.munMenorDens());
             System.out.println();
         });
 
